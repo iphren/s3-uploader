@@ -1,0 +1,141 @@
+:root {
+  --bg: #f5f6f8;
+  --fg: #1f2328;
+  --muted: #57606a;
+  --border: #d0d7de;
+  --accent: #0969da;
+  --accent-fg: #ffffff;
+  --error-bg: #ffebe9;
+  --error-fg: #82071e;
+  --success-bg: #dafbe1;
+  --success-fg: #0a3622;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+body {
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 520px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px 28px 28px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 1.4rem;
+}
+
+#instructions {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+#meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 20px;
+  padding: 12px 14px;
+  background: #f6f8fa;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.92rem;
+}
+
+#meta dt {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+#meta dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+.row {
+  margin: 12px 0;
+}
+
+input[type="file"] {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+input[type="file"]:focus,
+button:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--accent-fg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#status {
+  margin: 12px 0 4px;
+  color: var(--muted);
+  min-height: 1.4em;
+}
+
+#progress {
+  width: 100%;
+  height: 8px;
+}
+
+.error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: var(--error-bg);
+  color: var(--error-fg);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.success {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  background: var(--success-bg);
+  color: var(--success-fg);
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+.prefix-row { display: none; }
+#meta.has-prefix .prefix-row { display: block; }

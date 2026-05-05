@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex,nofollow" />
+  <title>Secure file upload</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <main class="card">
+    <h1>Secure file upload</h1>
+
+    <p id="instructions">
+      Choose a file and click <strong>Upload</strong>. The link will expire and
+      cannot be reused after that.
+    </p>
+
+    <dl id="meta">
+      <dt>Expires in</dt>
+      <dd id="expires">—</dd>
+      <dt>Max file size</dt>
+      <dd id="max-size">—</dd>
+      <dt class="prefix-row">Destination</dt>
+      <dd id="prefix" class="prefix-row">—</dd>
+    </dl>
+
+    <div class="row">
+      <input type="file" id="file" />
+    </div>
+
+    <div class="row">
+      <button id="upload" type="button" disabled>Upload</button>
+    </div>
+
+    <p id="status" aria-live="polite"></p>
+    <progress id="progress" value="0" max="100" hidden></progress>
+    <p id="error" class="error" hidden></p>
+    <p id="success" class="success" hidden></p>
+  </main>
+</body>
+</html>
