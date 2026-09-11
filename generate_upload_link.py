@@ -26,8 +26,7 @@ import json
 import os
 import secrets
 import sys
-import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -79,9 +78,14 @@ def parse_args() -> argparse.Namespace:
 def build_config(s3, args: argparse.Namespace) -> dict:
     max_bytes = args.max_mb * 1024 * 1024
     expires_in = args.expires_minutes * 60
-    expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(seconds=expires_in)
 
-    key_prefix = f"{args.prefix.strip('/')}/{date.today().isoformat()}/{uuid.uuid4()}/"
+    # Date + time first so prefixes sort chronologically; a short random
+    # suffix avoids collisions within the same second.
+    key_prefix = (
+        f"{args.prefix.strip('/')}/{now:%Y-%m-%d}/{now:%H%M%S}-{secrets.token_urlsafe(6)}/"
+    )
     key_template = key_prefix + "${filename}"
 
     fields: dict = {}
