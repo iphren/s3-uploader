@@ -1,8 +1,10 @@
-// Static S3 upload page. Reads a presigned-POST config from the `config`
-// query param (base64url-encoded JSON), then POSTs the chosen file directly
-// to S3. No credentials live here — everything sensitive is inside the link.
+// Static S3 upload page. Reads a presigned-POST config either by fetching
+// links/<id>.json from the bucket (short `?c=<id>&b=<bucket>&r=<region>`
+// links) or from the legacy `?config=` query param (base64url-encoded JSON),
+// then POSTs the chosen file directly to S3. No credentials live here —
+// everything sensitive is inside the fetched config / the link.
 
-(() => {
+(async () => {
   const $ = (id) => document.getElementById(id);
   const els = {
     expires: $("expires"),
@@ -63,27 +65,85 @@
     return `${sec}s`;
   };
 
-  // Parse `config` from the URL. Returns null on any failure (and surfaces an error).
-  const loadConfig = () => {
-    const raw = new URLSearchParams(location.search).get("config");
-    if (!raw) {
-      showError("This page needs a ?config=… link. Ask the sender for a fresh upload link.");
+  const checkShape = (cfg) => {
+    if (!cfg || typeof cfg.url !== "string" || !cfg.fields || typeof cfg.fields !== "object") {
+      throw new Error("Missing url/fields");
+    }
+    return cfg;
+  };
+
+  // Fetch links/<id>.json using the id/bucket/region from a short link.
+  // The patterns keep a crafted link from pointing the page at an
+  // attacker-controlled host — only real S3 endpoints can be built.
+  const fetchConfig = async (params) => {
+    const id = params.get("c");
+    const bucket = params.get("b");
+    const region = params.get("r");
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(id)) {
+      showError("This upload link is malformed and cannot be decoded.");
+      return null;
+    }
+    let configUrl;
+    if (bucket === null && region === null) {
+      // Bucket served behind the same origin as this page (e.g. CloudFront).
+      configUrl = `links/${id}.json`;
+    } else if (
+      /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket) &&
+      /^[a-z]{2}(-[a-z0-9]+)+$/.test(region)
+    ) {
+      // Path-style, because virtual-hosted style breaks TLS for bucket
+      // names containing dots (the wildcard cert covers one label only).
+      configUrl = `https://s3.${region}.amazonaws.com/${bucket}/links/${id}.json`;
+    } else {
+      showError("This upload link is malformed and cannot be decoded.");
+      return null;
+    }
+    let resp;
+    try {
+      resp = await fetch(configUrl, { cache: "no-store" });
+    } catch (e) {
+      showError(
+        "Could not load the upload link details. This is often a bucket misconfiguration — " +
+        "the bucket must allow public GET on links/* and list this page's origin in its CORS rules."
+      );
+      return null;
+    }
+    if (!resp.ok) {
+      showError(
+        resp.status === 403 || resp.status === 404
+          ? "This upload link is invalid or has expired. Please request a new one."
+          : `Could not load the upload link details (HTTP ${resp.status}).`
+      );
       return null;
     }
     try {
-      const json = decodeBase64Url(raw);
-      const cfg = JSON.parse(json);
-      if (!cfg || typeof cfg.url !== "string" || !cfg.fields || typeof cfg.fields !== "object") {
-        throw new Error("Missing url/fields");
-      }
-      return cfg;
+      return checkShape(await resp.json());
     } catch (e) {
       showError("This upload link is malformed and cannot be decoded.");
       return null;
     }
   };
 
-  const config = loadConfig();
+  // Load the config from the URL. Returns null on any failure (and surfaces an error).
+  const loadConfig = async () => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("c")) return fetchConfig(params);
+
+    // Legacy long links: the whole config is base64url-encoded in ?config=.
+    const raw = params.get("config");
+    if (!raw) {
+      showError("This page needs an upload link with its details attached. Ask the sender for a fresh upload link.");
+      return null;
+    }
+    try {
+      return checkShape(JSON.parse(decodeBase64Url(raw)));
+    } catch (e) {
+      showError("This upload link is malformed and cannot be decoded.");
+      return null;
+    }
+  };
+
+  const config = await loadConfig();
   if (!config) return;
 
   // Render meta.

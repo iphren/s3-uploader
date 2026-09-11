@@ -3,11 +3,15 @@
 
 The script prints a URL of the form:
 
-    {page_url}?config=<base64url-encoded JSON>
+    {page_url}?c=<random-id>&b=<bucket>&r=<region>
 
-The JSON carries the S3 endpoint, the presigned form fields, an expiry
-timestamp, a max-size hint, and the destination key prefix. The static
-page at `page_url` decodes it and POSTs the user's file straight to S3.
+The presigned-POST config (S3 endpoint, form fields, expiry timestamp,
+max-size hint, destination key prefix) is stored as JSON at
+`links/<random-id>.json` in the bucket itself. The static page at
+`page_url` fetches it and POSTs the user's file straight to S3. The
+config object must be fetchable by the page: either public GET on
+`links/*`, or the bucket served behind the page's own CloudFront
+distribution with `--same-origin` (see README).
 
 Credentials are sourced from the standard boto3 chain (AWS_PROFILE,
 environment variables, instance role, etc.) — this script never reads
@@ -17,9 +21,9 @@ or prints them.
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import os
+import secrets
 import sys
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -32,7 +36,9 @@ from dotenv import load_dotenv
 def parse_args() -> argparse.Namespace:
     load_dotenv()  # populate os.environ from .env if present
     p = argparse.ArgumentParser(
-        description="Generate a presigned-POST upload link for an S3 bucket.",
+        description="Generate a presigned-POST upload link for an S3 bucket. "
+                    "The link config is stored at links/<id>.json in the bucket, "
+                    "which the page must be able to fetch anonymously (see README).",
     )
     p.add_argument("--bucket", default=os.environ.get("S3_BUCKET"),
                    help="S3 bucket name (env: S3_BUCKET)")
@@ -42,6 +48,15 @@ def parse_args() -> argparse.Namespace:
                    help="Public URL of the static upload page (env: PAGE_URL)")
     p.add_argument("--prefix", default="incoming",
                    help="Top-level key prefix (default: incoming)")
+    p.add_argument("--links-prefix", default=os.environ.get("LINKS_PREFIX", "links"),
+                   help="Key prefix for stored link configs "
+                        "(env: LINKS_PREFIX, default: links)")
+    p.add_argument("--same-origin", action="store_true",
+                   default=bool(os.environ.get("SAME_ORIGIN_LINKS")),
+                   help="Omit bucket/region from the link so the page fetches "
+                        "links/<id>.json from its own origin — for buckets served "
+                        "behind the same CloudFront distribution as the page "
+                        "(env: SAME_ORIGIN_LINKS)")
     p.add_argument("--expires-minutes", type=int, default=720,
                    help="Link lifetime in minutes (default: 720)")
     p.add_argument("--max-mb", type=int, default=50000,
@@ -60,7 +75,7 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def build_config(args: argparse.Namespace) -> dict:
+def build_config(s3, args: argparse.Namespace) -> dict:
     max_bytes = args.max_mb * 1024 * 1024
     expires_in = args.expires_minutes * 60
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
@@ -77,7 +92,6 @@ def build_config(args: argparse.Namespace) -> dict:
         fields["Content-Type"] = args.content_type
         conditions.append({"Content-Type": args.content_type})
 
-    s3 = boto3.client("s3", region_name=args.region)
     try:
         presigned = s3.generate_presigned_post(
             Bucket=args.bucket,
@@ -103,17 +117,34 @@ def build_config(args: argparse.Namespace) -> dict:
     }
 
 
-def encode_config(cfg: dict) -> str:
-    raw = json.dumps(cfg, separators=(",", ":")).encode("utf-8")
-    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+def store_config(s3, bucket: str, links_prefix: str, cfg: dict) -> str:
+    """Upload the config JSON to <links_prefix>/<id>.json; the id is the bearer secret."""
+    link_id = secrets.token_urlsafe(16)
+    body = json.dumps(cfg, separators=(",", ":")).encode("utf-8")
+    try:
+        s3.put_object(
+            Bucket=bucket,
+            Key=f"{links_prefix.strip('/')}/{link_id}.json",
+            Body=body,
+            ContentType="application/json",
+            CacheControl="no-store",
+        )
+    except (BotoCoreError, ClientError) as e:
+        sys.stderr.write(f"Failed to store link config in bucket: {e}\n")
+        sys.exit(1)
+    return link_id
 
 
 def main() -> None:
     args = parse_args()
-    built = build_config(args)
-    token = encode_config(built["config"])
+    s3 = boto3.client("s3", region_name=args.region)
+    built = build_config(s3, args)
+    link_id = store_config(s3, args.bucket, args.links_prefix, built["config"])
     page = args.page_url.rstrip("/")
-    url = f"{page}/?config={token}"
+    if args.same_origin:
+        url = f"{page}/?c={link_id}"
+    else:
+        url = f"{page}/?c={link_id}&b={args.bucket}&r={args.region}"
 
     print("Upload link:")
     print(f"  {url}")

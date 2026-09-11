@@ -1,6 +1,9 @@
 # Secrets / local config
 .env
 
+# Site-specific assets (deployed if present, not tracked)
+favicon.ico
+
 # Python
 __pycache__/
 *.py[cod]
