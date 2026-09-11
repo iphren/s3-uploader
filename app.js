@@ -1,16 +1,15 @@
 // Static S3 upload page. Reads a presigned-POST config either by fetching
-// links/<id>.json from the bucket (short `?c=<id>&b=<bucket>&r=<region>`
-// links) or from the legacy `?config=` query param (base64url-encoded JSON),
-// then POSTs the chosen file directly to S3. No credentials live here —
-// everything sensitive is inside the fetched config / the link.
+// links/<id>.json from the bucket (short links: `?<id>` same-origin, or
+// `?c=<id>&b=<bucket>&r=<region>` direct to S3) or from the legacy
+// `?config=` query param (base64url-encoded JSON), then POSTs the chosen
+// file directly to S3. No credentials live here — everything sensitive is
+// inside the fetched config / the link.
 
 (async () => {
   const $ = (id) => document.getElementById(id);
   const els = {
     expires: $("expires"),
     maxSize: $("max-size"),
-    prefix: $("prefix"),
-    meta: $("meta"),
     file: $("file"),
     upload: $("upload"),
     status: $("status"),
@@ -75,11 +74,10 @@
   // Fetch links/<id>.json using the id/bucket/region from a short link.
   // The patterns keep a crafted link from pointing the page at an
   // attacker-controlled host — only real S3 endpoints can be built.
-  const fetchConfig = async (params) => {
-    const id = params.get("c");
+  const fetchConfig = async (id, params) => {
     const bucket = params.get("b");
     const region = params.get("r");
-    if (!/^[A-Za-z0-9_-]{16,64}$/.test(id)) {
+    if (!/^[A-Za-z0-9_-]{11,64}$/.test(id)) {
       showError("This upload link is malformed and cannot be decoded.");
       return null;
     }
@@ -127,7 +125,11 @@
   // Load the config from the URL. Returns null on any failure (and surfaces an error).
   const loadConfig = async () => {
     const params = new URLSearchParams(location.search);
-    if (params.get("c")) return fetchConfig(params);
+    // Shortest form: the whole query is the bare id (?fY3kQ9pLx2M).
+    const rawQuery = location.search.slice(1);
+    const bareId = rawQuery && !rawQuery.includes("=") ? rawQuery : null;
+    const id = params.get("c") || bareId;
+    if (id) return fetchConfig(id, params);
 
     // Legacy long links: the whole config is base64url-encoded in ?config=.
     const raw = params.get("config");
@@ -148,10 +150,6 @@
 
   // Render meta.
   if (config.maxBytes) els.maxSize.textContent = formatBytes(config.maxBytes);
-  if (config.keyPrefix) {
-    els.prefix.textContent = config.keyPrefix;
-    els.meta.classList.add("has-prefix");
-  }
 
   // Expiry countdown.
   let expiresAt = null;

@@ -3,7 +3,8 @@
 
 The script prints a URL of the form:
 
-    {page_url}?c=<random-id>&b=<bucket>&r=<region>
+    {page_url}?c=<random-id>&b=<bucket>&r=<region>   # direct-to-S3 fetch
+    {page_url}?<random-id>                           # with --same-origin
 
 The presigned-POST config (S3 endpoint, form fields, expiry timestamp,
 max-size hint, destination key prefix) is stored as JSON at
@@ -119,7 +120,8 @@ def build_config(s3, args: argparse.Namespace) -> dict:
 
 def store_config(s3, bucket: str, links_prefix: str, cfg: dict) -> str:
     """Upload the config JSON to <links_prefix>/<id>.json; the id is the bearer secret."""
-    link_id = secrets.token_urlsafe(16)
+    # 64 bits: unguessable over HTTP, and short (11 chars) for tidy links.
+    link_id = secrets.token_urlsafe(8)
     body = json.dumps(cfg, separators=(",", ":")).encode("utf-8")
     try:
         s3.put_object(
@@ -142,7 +144,7 @@ def main() -> None:
     link_id = store_config(s3, args.bucket, args.links_prefix, built["config"])
     page = args.page_url.rstrip("/")
     if args.same_origin:
-        url = f"{page}/?c={link_id}"
+        url = f"{page}/?{link_id}"
     else:
         url = f"{page}/?c={link_id}&b={args.bucket}&r={args.region}"
 

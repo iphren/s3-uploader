@@ -100,7 +100,7 @@ policy, no more sensitive than the link itself.
 Alternatively, if the bucket sits behind the same CloudFront distribution
 that serves the page, no public policy is needed: store the configs under
 a prefix CloudFront already serves and pass `--same-origin` so the
-printed link is just `?c=<id>` — the page then fetches `links/<id>.json`
+printed link is just `?<id>` — the page then fetches `links/<id>.json`
 from its own origin. For example, with the page served from an origin
 path of `/web`, put this in `.env`:
 

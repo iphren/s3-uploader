@@ -136,6 +136,3 @@ button:disabled {
   border-radius: 6px;
   word-break: break-all;
 }
-
-.prefix-row { display: none; }
-#meta.has-prefix .prefix-row { display: block; }
